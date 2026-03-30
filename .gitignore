@@ -1,0 +1,12 @@
+venv/
+.mypy_cache/
+__pycache__/
+
+*.pyc
+*.xls
+*.zip
+*.nii.gz
+*.pth
+*.pt
+*.csv
+*.png
