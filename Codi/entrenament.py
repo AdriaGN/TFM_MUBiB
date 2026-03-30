@@ -123,8 +123,12 @@ def entrenament_model() -> None:
                 )
 
             # Retropropagació i actualització dels errors amb escalat per evitar pèrdues
-            # si són molt petits.
+            # si són molt petits. També fa un tall de gradients seguint la configuració,
+            # per evitar que el model es trenqui amb datasets petits
             escalador.scale(perdua_total).backward()
+            if parametres.TALL_GRADIENTS:
+                escalador.unscale_(optimitzador)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             escalador.step(optimitzador)
             escalador.update()
 

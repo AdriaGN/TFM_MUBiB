@@ -1,6 +1,7 @@
 venv/
 .mypy_cache/
 __pycache__/
+Models/
 
 *.pyc
 *.xls

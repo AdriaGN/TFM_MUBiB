@@ -114,7 +114,7 @@ if __name__ == "__main__":
     """Execució principal del programa per seleccionar quins tractaments cal aplicar."""
     # Mostrar les opcions i permetre a l'usuari triar-ne una
     print("1. Skull Stripping dels cervells")
-    print("2. Generar particions Entrenament/Validació")
+    print("2. Generar particions Entrenament/Validació/Test")
     print("3. Skull Stripping + Generar particions Entrenament/Validació/Test")
     opcio = input()
 

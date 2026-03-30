@@ -7,6 +7,7 @@ from configuracio import parametres
 from monai.data import CacheDataset, DataLoader
 from monai.transforms import (
     Compose,
+    CropForegroundd,
     EnsureChannelFirstd,
     LoadImaged,
     Orientationd,
@@ -95,8 +96,9 @@ def _aplicar_transformacions() -> Compose:
            tal i com requereix Conv3d de PyTorch.
         3. Normalització d'orientació per garantir que el NIfTI segueix l'estàndard RAS
            (Right, Anterior, Superior) i no tenir orientacions diferents.
-        4. Escalatge d'intensitat dels vòxels a una escala de grisos entre 0 i 1.
-        5. Redimensionar la resolució a [192, 224, 192] per evitar problemes de memòria.
+        4. Retallar el fons per aïllar només el cervell.
+        5. Escalatge d'intensitat dels vòxels a una escala de grisos entre 0 i 1.
+        6. Redimensionar la resolució a [192, 224, 192] per evitar problemes de memòria.
 
     Returns:
         Objecte compost de MONAI amb la seqüència de transformacions a aplicar.
@@ -106,6 +108,7 @@ def _aplicar_transformacions() -> Compose:
             LoadImaged(keys=["imatge"]),
             EnsureChannelFirstd(keys=["imatge"]),
             Orientationd(keys=["imatge"], axcodes="RAS"),
+            CropForegroundd(keys=["imatge"], source_key="imatge"),
             ScaleIntensityd(keys=["imatge"]),
             Resized(keys=["imatge"], spatial_size=(192, 224, 192)),
         ]

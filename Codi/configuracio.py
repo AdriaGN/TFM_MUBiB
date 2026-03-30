@@ -91,6 +91,7 @@ class Configuracio:
     EPOQUES: int = 200
     PES_L1: float = 0.2
     PES_SSIM: float = 0.8
+    TALL_GRADIENTS: bool = False
 
 
 # Instància única que la resta de scripts importaran
