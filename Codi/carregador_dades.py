@@ -11,8 +11,9 @@ from monai.transforms import (
     EnsureChannelFirstd,
     LoadImaged,
     Orientationd,
-    Resized,
+    ResizeWithPadOrCropd,
     ScaleIntensityd,
+    Spacingd,
 )
 
 
@@ -94,11 +95,12 @@ def _aplicar_transformacions() -> Compose:
         1. Càrrega de la imatge
         2. Format de canals per assegurar que la dimensió del canal sigui la primera,
            tal i com requereix Conv3d de PyTorch.
-        3. Normalització d'orientació per garantir que el NIfTI segueix l'estàndard RAS
+        3. Normalització de la mida dels vòxels per uniformar mides dels datasets
+        4. Normalització d'orientació per garantir que el NIfTI segueix l'estàndard RAS
            (Right, Anterior, Superior) i no tenir orientacions diferents.
-        4. Retallar el fons per aïllar només el cervell.
-        5. Escalatge d'intensitat dels vòxels a una escala de grisos entre 0 i 1.
-        6. Redimensionar la resolució a [192, 224, 192] per evitar problemes de memòria.
+        5. Retallar el fons per aïllar només el cervell.
+        6. Escalatge d'intensitat dels vòxels a una escala de grisos entre 0 i 1.
+        7. Redimensionar la resolució a [192, 224, 192] per evitar problemes de memòria.
 
     Returns:
         Objecte compost de MONAI amb la seqüència de transformacions a aplicar.
@@ -107,9 +109,10 @@ def _aplicar_transformacions() -> Compose:
         [
             LoadImaged(keys=["imatge"]),
             EnsureChannelFirstd(keys=["imatge"]),
+            Spacingd(keys=["imatge"], pixdim=(1.0, 1.0, 1.0), mode="bilinear"),
             Orientationd(keys=["imatge"], axcodes="RAS"),
             CropForegroundd(keys=["imatge"], source_key="imatge"),
             ScaleIntensityd(keys=["imatge"]),
-            Resized(keys=["imatge"], spatial_size=(192, 224, 192)),
+            ResizeWithPadOrCropd(keys=["imatge"], spatial_size=(192, 224, 192)),
         ]
     )

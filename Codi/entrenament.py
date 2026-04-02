@@ -128,7 +128,9 @@ def entrenament_model() -> None:
             escalador.scale(perdua_total).backward()
             if parametres.TALL_GRADIENTS:
                 escalador.unscale_(optimitzador)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm=parametres.PES_GRADIENTS
+                )
             escalador.step(optimitzador)
             escalador.update()
 

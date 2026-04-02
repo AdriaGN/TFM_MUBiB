@@ -17,10 +17,10 @@ class Configuracio:
 
     ### 1. Generació de models
     # Selecció dinàmics dels datasets per crear el model actual
-    DATASETS_ACTIUS: Tuple[str, ...] = ("IXI",)
+    DATASETS_ACTIUS: Tuple[str, ...] = ("HCP",)
 
     # Nom del model a generar
-    NOM_MODEL: str = "Model_IXI"
+    NOM_MODEL: str = "Model_HCP"
 
     ### 2. Rutes de directoris
     # Ruta arrel del repositori i directoris principals
@@ -84,14 +84,15 @@ class Configuracio:
     NOMBRE_TREBALLADORS: int = 4
 
     # Entrenament
-    TAXA_APRENENTATGE: float = 1e-4
+    TAXA_APRENENTATGE: float = 5e-5
     CAIGUDA_PES_ADAMW: float = 1e-4
-    ITERACIONS_REDUCCIO: int = 10
+    ITERACIONS_REDUCCIO: int = 4
     FACTOR_REDUCCIO: float = 0.5
     EPOQUES: int = 200
     PES_L1: float = 0.2
     PES_SSIM: float = 0.8
-    TALL_GRADIENTS: bool = False
+    TALL_GRADIENTS: bool = True
+    PES_GRADIENTS: float = 0.5
 
 
 # Instància única que la resta de scripts importaran
