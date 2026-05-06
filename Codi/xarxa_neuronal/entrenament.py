@@ -1,21 +1,24 @@
 """Mòdul encarregat de realitzar l'entrenament de la xarxa neuronal."""
 
 import logging
-import sys
-from dataclasses import asdict
 
+import matplotlib
+
+matplotlib.use("Agg")  # Evitar que Matplotlib mostri imatges durant el procés
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from carregador_dades import obtenir_dataloaders
 from configuracio import parametres
+from dades.carregador_dades import obtenir_dataloaders_entrenament
 from matplotlib import pyplot as plt
-from model import XarxaNeuronal
 from monai.losses import SSIMLoss
 from torch.utils.tensorboard import SummaryWriter
 
+from xarxa_neuronal.model import XarxaNeuronal
 
-def entrenament_model() -> None:
+
+def entrenament_model(dispositiu: torch.device) -> bool:
     """Funció principal que dirigeix l'entrenament de la xarxa neuronal.
 
     Es comença amb la preparació de l'entorn d'entrenament inicialitzant els sistemes de
@@ -30,13 +33,16 @@ def entrenament_model() -> None:
     finals i s'escriuen logs tant a un fitxer com a la TensorBoard per tenir
     traçabilitat. Finalment es verifica si el model generat és millor que anteriors i es
     guarda per evitar sobreajustaments.
+
+    Args:
+        dispositiu: Dispositiu (GPU o CPU) amb el que s'entrena el model.
+
+    Returns:
+        Booleà que indica si s'ha entrenat correctament o no el model.
     """
     ### 1. Preparació de l'entorn d'entrenament
-    # Inicialització del sistema de logging, dispositiu i registre de la configuració
-    _configurar_logging()
+    # Inicialització del sistema de logging de Tensorboad amb les mètriques
     log_tensorboard = SummaryWriter(parametres.DIR_TENSORBOARD)
-    dispositiu = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    _registrar_configuracio_model(dispositiu)
 
     # Benchmark automàtic per trobar la millor configuració d'entrenament per a cada
     # capa del model i millorar el rendiment
@@ -60,8 +66,6 @@ def entrenament_model() -> None:
     )
 
     criteri_l1 = nn.L1Loss()
-    criteri_ssim = SSIMLoss(spatial_dims=3)
-
     escalador = torch.amp.GradScaler("cuda")
 
     # Verificar si existeix algun checkpoint i carregar-lo
@@ -70,7 +74,6 @@ def entrenament_model() -> None:
 
     if parametres.RUTA_PESOS_ULTIM.exists():
         checkpoint = torch.load(parametres.RUTA_PESOS_ULTIM, weights_only=False)
-
         model.load_state_dict(checkpoint["estat_model"])
         optimitzador.load_state_dict(checkpoint["estat_optimitzador"])
         planificador_lr.load_state_dict(checkpoint["estat_planificador"])
@@ -87,7 +90,7 @@ def entrenament_model() -> None:
 
     # Càrrega de les dades amb els DataLoaders (utilitzant type: ignore per ignorar el
     # nombre de caràcters màxims per línia en el log)
-    loader_entrenament, loader_validacio = obtenir_dataloaders()
+    loader_entrenament, loader_validacio = obtenir_dataloaders_entrenament()
     logging.info(
         f"Carregades {len(loader_entrenament.dataset)} mostres d'entrenament i "  # type: ignore
         f"{len(loader_validacio.dataset)} de validació."  # type: ignore
@@ -110,14 +113,24 @@ def entrenament_model() -> None:
         # Bucle d'entrenament per batches
         for i, batch in enumerate(loader_entrenament):
             # Carregar imatges a la GPU i reiniciar les gradients de l'optimitzador
-            inputs = batch["imatge"].to(dispositiu)
             optimitzador.zero_grad()
 
             # Utilitzar l'accelerador AMP per calcular els outputs i calcular pèrdues
             with torch.amp.autocast("cuda"):
-                outputs = model(inputs)
-                perdua_l1 = criteri_l1(outputs, inputs)
-                perdua_ssim = criteri_ssim(outputs, inputs)
+                inputs_nets = batch["imatge"].to(dispositiu)
+                # Aplicar soroll a la imatge per reduir la probabilitat de que la xarxa
+                # neuronal faci còpies de les imatges en comptes d'aprendre
+                soroll = torch.randn_like(inputs_nets) * parametres.FACTOR_SOROLL
+                inputs_bruts = inputs_nets + soroll
+                outputs = model(inputs_bruts)
+                # Pel cas de la pèrdua de L1 es pot utilitzar el criteri anterior, però
+                # per SSIM cal adaptar-se al rang de colors del batch (degut a la
+                # normalització realitzada per MONAI)
+                perdua_l1 = criteri_l1(outputs, inputs_nets)
+                rang_batch = (inputs_nets.max() - inputs_nets.min()).item()
+                criteri_ssim_batch = SSIMLoss(spatial_dims=3, data_range=rang_batch)
+                perdua_ssim = criteri_ssim_batch(outputs, inputs_nets)
+                # Càlcul de la pèrdua total a partir dels pesos configurats
                 perdua_total = (parametres.PES_L1 * perdua_l1) + (
                     parametres.PES_SSIM * perdua_ssim
                 )
@@ -160,11 +173,20 @@ def entrenament_model() -> None:
             # Bucle de validació per batches
             for batch in loader_validacio:
                 # Carregar imatges a la GPU i utilitzar l'accelerador AMP de nou
-                inputs = batch["imatge"].to(dispositiu)
+                inputs_nets = batch["imatge"].to(dispositiu)
+                # Com abans, aplicar soroll a la imatge per reduir la probabilitat de
+                # que la xarxa neuronal faci còpies de les imatges en comptes d'aprendre
+                soroll = torch.randn_like(inputs_nets) * parametres.FACTOR_SOROLL
+                inputs_bruts = inputs_nets + soroll
                 with torch.amp.autocast("cuda"):
-                    outputs = model(inputs)
-                    perdua_l1 = criteri_l1(outputs, inputs)
-                    perdua_ssim = criteri_ssim(outputs, inputs)
+                    outputs = model(inputs_bruts)
+                    # Com abans, calcular la pèrdua de L1 amb el seu criteri i la de
+                    # SSIM per rangs
+                    perdua_l1 = criteri_l1(outputs, inputs_nets)
+                    rang_batch = (inputs_nets.max() - inputs_nets.min()).item()
+                    criteri_ssim_batch = SSIMLoss(spatial_dims=3, data_range=rang_batch)
+                    perdua_ssim = criteri_ssim_batch(outputs, inputs_nets)
+                    # Càlcul de la pèrdua total
                     perdua_total = (parametres.PES_L1 * perdua_l1) + (
                         parametres.PES_SSIM * perdua_ssim
                     )
@@ -200,7 +222,7 @@ def entrenament_model() -> None:
             f"SSIM: {mitjana_ssim_validacio:.4f}"
         )
 
-        # Log a la TensorBoard de cada pèrdua i la taxa d'aprenentatge com a escalars
+        # Logs a la TensorBoard de cada pèrdua i la taxa d'aprenentatge com a escalars
         log_tensorboard.add_scalars(
             "Pèrdua Total",
             {"Entrenament": mitjana_entrenament, "Validacio": mitjana_validacio},
@@ -250,59 +272,7 @@ def entrenament_model() -> None:
 
     log_tensorboard.close()
     logging.info("=== Final de l'entrenament ===")
-
-
-def _configurar_logging() -> None:
-    """Configuració del sistema de logs de l'entrenament tant a consola com a un fitxer.
-
-    Els logs s'emmagatzemaran tant en la consola d'execució com en un fitxer alhora. Hi
-    haurà diferents nivells de missatges (INFO, ERROR, etc.) i l'estructura del format
-    serà HORES:MINUTS:SEGONS - NIVELL MISSATGE - MISSATGE
-    """
-    # Creació del format del log
-    format_log = logging.Formatter(
-        "%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
-    )
-
-    # Assegurar que les carpetes de logs i evolució existeixen
-    parametres.DIR_LOGS.mkdir(parents=True, exist_ok=True)
-    parametres.DIR_EVOLUCIO.mkdir(parents=True, exist_ok=True)
-
-    # Creació dels dos handlers (consola i fitxer) per gestionar els logs
-    handler_consola = logging.StreamHandler(sys.stdout)
-    handler_consola.setFormatter(format_log)
-    handler_logs = logging.FileHandler(parametres.RUTA_FITXER_LOGS, encoding="UTF-8")
-    handler_logs.setFormatter(format_log)
-
-    # Configuració del logger
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    logger.addHandler(handler_consola)
-    logger.addHandler(handler_logs)
-
-
-def _registrar_configuracio_model(dispositiu: torch.device) -> None:
-    """Escriu una entrada en el fitxer de log amb la configuració del model entrenat.
-
-    Llegeix la dataclass de la configuració (emmagatzemada a parametres) i genera un
-    diccionari dels seus valors amb asdict. Tot seguit, per cada parella clau-valor,
-    escriu una línia en el log, formatejant de manera que hi hagi 25 caràcters a la
-    part de clau. A més, al final també inclou el dispositiu que s'ha utilitzat.
-    S'encapsula tot amb "=" per diferenciar-ho de la resta de logs.
-
-    Args:
-        dispositiu: Dispositiu (GPU o CPU) amb el que s'entrena el model.
-    """
-    # Capçalera
-    logging.info("=" * 50)
-    logging.info(f"CONFIGURACIÓ MODEL {parametres.NOM_MODEL}:\n")
-    # Configuració i dispositiu
-    diccionari_configuracio = asdict(parametres)
-    for clau, valor in diccionari_configuracio.items():
-        logging.info(f"{clau:<25}: {valor}")
-    logging.info(f"\nDispositiu utilitzat durant l'entrenament: {dispositiu}")
-    # Tancament
-    logging.info("=" * 50 + "\n")
+    return True
 
 
 def _generar_foto_evolucio(
@@ -311,7 +281,9 @@ def _generar_foto_evolucio(
     """Genera una comparativa visual entre la imatge d'input i output en el mateix punt.
 
     Es generarà una imatge on es compararà la imatge original d'un tall central del
-    cervell amb la generada per el model en el mateix punt.
+    cervell amb la generada per el model en el mateix punt. Pot donar-se la situació
+    en que la imatge sigui d'una època amb pitjors resultats, però es logejarà igualment
+    per traçabilitat i històric.
 
     Args:
         model: Model entrenat en la època actual en que s'ha cridat la funció.
@@ -324,18 +296,23 @@ def _generar_foto_evolucio(
         with torch.amp.autocast("cuda"):
             prediccio = model(imatge)
 
-    # Extracció d'un tall central (96) i convertir de tensor a matriu de Numpy
-    # per poder fer les imatges 2D
-    original = imatge[0, 0, :, :, 96].cpu().numpy()
-    prediccio = prediccio[0, 0, :, :, 96].cpu().numpy()
+    # Extracció d'un tall central (96) i convertir de tensor a matriu de Numpy per poder
+    # fer les imatges 2D i treballar amb MatPlotlib
+    original = imatge[0, 0, :, :, 96].cpu().float().numpy()
+    prediccio = prediccio[0, 0, :, :, 96].cpu().float().numpy()
+
+    # Comprovació dels valors de colors mínim i màxim per representar-la correctament
+    # (en cas contrari, la imatge tindria un color diferent durant la captura i no es
+    # podria comparar correctament)
+    v_min, v_max = np.percentile(original, [1, 99])
 
     # Creació de la imatge
     fig, axs = plt.subplots(1, 2)
     fig.suptitle(f"Evolució del model {parametres.NOM_MODEL} a l'època {epoca + 1}")
-    axs[0].imshow(original, cmap="gray")
+    axs[0].imshow(original, cmap="gray", vmin=v_min, vmax=v_max)
     axs[0].set_title("Original")
     axs[0].axis("off")
-    axs[1].imshow(prediccio, cmap="gray")
+    axs[1].imshow(prediccio, cmap="gray", vmin=v_min, vmax=v_max)
     axs[1].set_title("Predicció")
     axs[1].axis("off")
 
@@ -344,16 +321,3 @@ def _generar_foto_evolucio(
     plt.savefig(ruta_guardat, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     logging.info(f"Captura de l'evolució d'entrenament guardada: {ruta_guardat.name}")
-
-
-if __name__ == "__main__":
-    """Execució principal de l'entrenament."""
-    # Gestionar errors durant l'execució i loggejar-los
-    try:
-        entrenament_model()
-    except KeyboardInterrupt:
-        logging.warning("Entrenament interromput manualment")
-    except Exception as e:
-        logging.error(
-            f"Entrenament interromput per un error. Detalls:\n{e}, exc_info=True"
-        )
