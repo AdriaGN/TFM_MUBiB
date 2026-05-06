@@ -33,10 +33,10 @@ class XarxaNeuronal(nn.Module):
         super().__init__()
 
         # Definició dels canals
-        canal_1 = parametres.CANALS_BASE  # 16
-        canal_2 = canal_1 * 2  # 32
-        canal_3 = canal_1 * 4  # 64
-        canal_4 = parametres.CANALS_LATENT  # 16
+        canal_1 = parametres.CANALS_BASE  # 32
+        canal_2 = canal_1 * 2  # 64
+        canal_3 = canal_1 * 4  # 128
+        canal_4 = parametres.CANALS_LATENT  # 256
 
         # Fase 1: Codificador
         self.codificador = nn.Sequential(
