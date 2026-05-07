@@ -150,7 +150,7 @@ class Configuracio:
     PES_SSIM: float = 0.8
     TALL_GRADIENTS: bool = True
     PES_GRADIENTS: float = 0.5
-    FACTOR_SOROLL: float = 0.05
+    FACTOR_SOROLL: float = 0.0
 
     # Test i mapes de calor
     PASSADES_MODEL: int = 50
