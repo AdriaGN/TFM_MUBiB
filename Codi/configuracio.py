@@ -130,8 +130,8 @@ class Configuracio:
     # Model
     ENTRADA: int = 1
     SORTIDA: int = 1
-    CANALS_BASE: int = 32
-    CANALS_LATENT: int = 256
+    CANALS_BASE: int = 16
+    CANALS_LATENT: int = 16
     RATIO_DROPOUT_LATENT: float = 0.15
     RATIO_DROPOUT: float = 0.05
     RATIO_RELU: float = 0.2
@@ -150,7 +150,7 @@ class Configuracio:
     PES_SSIM: float = 0.8
     TALL_GRADIENTS: bool = True
     PES_GRADIENTS: float = 0.5
-    FACTOR_SOROLL: float = 0.0
+    FACTOR_SOROLL: float = 0.05
 
     # Test i mapes de calor
     PASSADES_MODEL: int = 50
