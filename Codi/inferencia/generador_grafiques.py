@@ -27,12 +27,20 @@ def generar_grafics(llindar_95: float, llindar_youden: float) -> None:
     metriques_crues = pd.read_csv(Path(parametres.RUTA_METRIQUES), sep=";")
     metriques_harmonitzades = pd.read_csv(Path(parametres.RUTA_HARMONITZACIO), sep=";")
 
+    # Obtenir les mètriques sense el repositori BraTS per les corbes ROC
+    metriques_crues_netes = metriques_crues[
+        ~metriques_crues["Dataset"].str.contains("BRATS")
+    ]
+    metriques_harm_netes = metriques_harmonitzades[
+        ~metriques_harmonitzades["Dataset"].str.contains("BRATS")
+    ]
+
     # Dibuixar gràfics de dispersió abans i després d'harmonitzar
     _dibuixar_dispersio(metriques_crues, "Cru")
     _dibuixar_dispersio(metriques_harmonitzades, "Harmonitzat")
 
     # Dibuixar gràfic amb les corbes ROC (tant original com harmonitzada) i punt Youden
-    _dibuixar_roc(metriques_crues, metriques_harmonitzades, llindar_youden)
+    _dibuixar_roc(metriques_crues_netes, metriques_harm_netes, llindar_youden)
 
     # Dibuixar diagrama de caixes amb l'efecte de l'harmonització
     _dibuixar_harmonitzacio(metriques_crues, metriques_harmonitzades)
@@ -73,8 +81,8 @@ def _dibuixar_dispersio(metriques: pd.DataFrame, titol: str) -> None:
         alpha=0.75,
     )
     # Posar noms als eixos i crear llegenda
-    plt.xlabel("Diferència Mitjana d'Anomalia")
-    plt.ylabel("Pic d'Anomalia")
+    plt.xlabel("Diferència Mitjana d'Anomalia (u.a.)")
+    plt.ylabel("Pic d'Anomalia (u.a.)")
     punts, etiquetes_dataset = plt.gca().get_legend_handles_labels()
     plt.legend(punts, etiquetes_dataset, bbox_to_anchor=(1.01, 1.01))
 
@@ -185,7 +193,7 @@ def _dibuixar_harmonitzacio(
 
     # Posar noms als eixos
     plt.xlabel("Dataset")
-    plt.ylabel("Error de Reconstrucció Mitjà")
+    plt.ylabel("Error de Reconstrucció Mitjà (u.a.)")
 
     # Guardar la gràfica en format estret (per no perdre informació) i tancar PyPlot
     plt.tight_layout()
@@ -238,7 +246,7 @@ def _dibuixar_cdr(
     )
 
     # Posar noms a l'eix i crear la llegenda
-    plt.ylabel("Volum d'Anomalia Global")
+    plt.ylabel("Volum d'Anomalia Global (Vòxels)")
     plt.legend()
 
     # Guardar la gràfica i tancar PyPlot
@@ -278,14 +286,14 @@ def _dibuixar_comparativa_malaltia(metriques: pd.DataFrame, titol: str) -> None:
         x="Malaltia",
         y=parametres.METRICA_TOTAL,
         hue="Malaltia",
-        order=list({"Sa", "Alzheimer", "Tumor"}),
-        palette={"palegreen", "lightblue", "lightcoral"},
+        order=["Sa", "Alzheimer", "Tumor"],
+        palette=["palegreen", "lightblue", "lightcoral"],
         legend=False,
     )
 
     # Posar noms als eixos
     plt.xlabel("Grup Patològic")
-    plt.ylabel("Volum d'Anomalia Global")
+    plt.ylabel("Volum d'Anomalia Global (Vòxels)")
 
     # Guardar la gràfica en format estret (per no perdre informació) i tancar PyPlot
     plt.tight_layout()

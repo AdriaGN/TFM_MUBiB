@@ -2,6 +2,7 @@ venv/
 .mypy_cache/
 __pycache__/
 Models/
+Informe Final/
 
 *.pyc
 *.xls
@@ -11,3 +12,5 @@ Models/
 *.pt
 *.csv
 *.png
+.Rproj.user
+*.puml
