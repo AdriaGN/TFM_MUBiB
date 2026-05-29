@@ -382,11 +382,11 @@ def _generar_mapes_calor() -> None:
         grafics[2].set_title("Mapa de Calor")
         grafics[2].axis("off")
 
-        # Dibuixar la barra/llegenda de colors de la superposició de la tercera imatge
-        figura.colorbar(superposicio_colors)
-
-        # Afegir titol amb el NIfTI comparat
-        plt.suptitle(f"Comparació Resultats - {directori_nifti.name}", weight="bold")
+        # Dibuixar la barra/llegenda de colors del mapa de calor
+        barra_colors = figura.colorbar(superposicio_colors)
+        barra_colors.set_label(
+            "Incertesa de Reconstrucció (u.a.)", rotation=90, labelpad=10
+        )
 
         # Guardar la comparació en format estret i tancar PyPlot
         plt.tight_layout()
